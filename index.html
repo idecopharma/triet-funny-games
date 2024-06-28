@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LUYỆN QUYẾT CHỐT SALES - IDECO</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            touch-action: none;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 18px;
+            color: yellow;
+            background-color: rgba(0,0,0,0.5);
+            padding: 5px;
+            border-radius: 5px;
+        }
+        #startMenu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background-color: rgba(0,0,0,0.7);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+        }
+        #startButton {
+            font-size: 24px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #rules {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 14px;
+            color: white;
+            background-color: rgba(0,0,0,0.5);
+            padding: 5px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="info">Số khách hàng đã chốt: 0 | Thời gian: 45s</div>
+        <div id="startMenu">
+            <h2>Sẵn sàng chốt đơn?</h2>
+            <button id="startButton">Bắt đầu Game</button>
+        </div>
+        <div id="rules">
+            Thể lệ: Chọn đúng banner đỏ "Chốt 1 khách hàng" (+1 điểm), chọn nhầm (-1 điểm)
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const infoElement = document.getElementById('info');
+        const startMenu = document.getElementById('startMenu');
+        const startButton = document.getElementById('startButton');
+
+        let basket = {
+            x: 0,
+            y: 0,
+            width: 80,
+            height: 100,
+            color: 'yellow'
+        };
+
+        let banners = [];
+        let particles = [];
+        let score = 0;
+        let timeLeft = 40;
+        let gameStartTime;
+        let isGameRunning = false;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            basket.x = canvas.width / 2;
+            basket.y = canvas.height / 2;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function drawBasket() {
+            ctx.fillStyle = basket.color;
+            ctx.beginPath();
+            ctx.moveTo(basket.x, basket.y);
+            ctx.lineTo(basket.x - basket.width / 2, basket.y + basket.height);
+            ctx.lineTo(basket.x + basket.width / 2, basket.y + basket.height);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawBanner(banner) {
+            ctx.fillStyle = banner.color;
+            ctx.fillRect(banner.x - banner.width / 2, banner.y, banner.width, banner.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(banner.text, banner.x, banner.y + banner.height / 2);
+        }
+
+        function createBanner() {
+            const random = Math.random();
+            const isTarget = random < 0.2;
+            const isRedDecoy = random >= 0.2 && random < 0.4;
+            return {
+                x: Math.random() * canvas.width,
+                y: 0,
+                width: 120,
+                height: 40,
+                color: isTarget || isRedDecoy ? 'red' : `rgb(${Math.random()*255},${Math.random()*255},${Math.random()*255})`,
+                text: isTarget ? "Chốt 1 khách hàng" : "Không phải khách hàng",
+                speed: 0.5,
+                isTarget: isTarget
+            };
+        }
+
+        function createParticle(x, y) {
+            return {
+                x: x,
+                y: y,
+                size: Math.random() * 5 + 2,
+                color: `hsl(${Math.random() * 360}, 50%, 50%)`,
+                speedX: Math.random() * 6 - 3,
+                speedY: Math.random() * 6 - 3,
+                life: 100
+            };
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.speedX;
+                p.y += p.speedY;
+                p.life--;
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        function updateInfo() {
+            infoElement.textContent = `Số khách hàng đã chốt: ${score} | Thời gian: ${timeLeft}s`;
+        }
+
+        function calculateReward() {
+            if (score < 10) return 50000;
+            if (score < 20) return 40000;
+            if (score < 30) return 30000;
+            return 20000;
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            const reward = calculateReward();
+            if (score >= 12) {
+                alert(`Chúc mừng! Bạn đã chốt được ${score} khách hàng. KPI bạn đạt và thưởng ${reward}đ`);
+            } else {
+                alert(`Bạn chỉ chốt được ${score} khách hàng. Luyện thêm đi em`);
+            }
+            startMenu.style.display = 'block';
+        }
+
+        function update() {
+            if (!isGameRunning) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawBasket();
+            updateParticles();
+
+            const currentTime = Date.now();
+            const elapsedTime = (currentTime - gameStartTime) / 1000;
+
+            for (let i = banners.length - 1; i >= 0; i--) {
+                let banner = banners[i];
+                banner.speed = 0.5 + (elapsedTime / 10);
+                banner.y += banner.speed;
+                drawBanner(banner);
+
+                if (banner.y + banner.height > basket.y && 
+                    banner.y < basket.y + basket.height &&
+                    banner.x > basket.x - basket.width / 2 && 
+                    banner.x < basket.x + basket.width / 2) {
+                    banners.splice(i, 1);
+                    if (banner.isTarget) {
+                        score++;
+                        updateInfo();
+                        for (let j = 0; j < 30; j++) {
+                            particles.push(createParticle(banner.x, banner.y));
+                        }
+                    } else {
+                        score = Math.max(0, score - 1);
+                        updateInfo();
+                    }
+                } else if (banner.y > canvas.height) {
+                    banners.splice(i, 1);
+                }
+            }
+
+            if (Math.random() < 0.05) {
+                banners.push(createBanner());
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        function handleTouch(event) {
+            event.preventDefault();
+            const touch = event.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            basket.x = touch.clientX - rect.left;
+            basket.y = touch.clientY - rect.top;
+        }
+
+        function handleMouse(event) {
+            const rect = canvas.getBoundingClientRect();
+            basket.x = event.clientX - rect.left;
+            basket.y = event.clientY - rect.top;
+        }
+
+        canvas.addEventListener('touchmove', handleTouch);
+        canvas.addEventListener('touchstart', handleTouch);
+        canvas.addEventListener('mousemove', handleMouse);
+
+        function countdown() {
+            if (!isGameRunning) return;
+            timeLeft--;
+            updateInfo();
+            if (timeLeft <= 0) {
+                endGame();
+            } else {
+                setTimeout(countdown, 1000);
+            }
+        }
+
+        function startGame() {
+            isGameRunning = true;
+            score = 0;
+            timeLeft = 45;
+            banners = [];
+            particles = [];
+            gameStartTime = Date.now();
+            startMenu.style.display = 'none';
+            update();
+            countdown();
+        }
+
+        startButton.addEventListener('click', startGame);
+        startButton.addEventListener('touchstart', startGame);
+    </script>
+</body>
+</html>
